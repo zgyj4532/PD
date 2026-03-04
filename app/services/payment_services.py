@@ -399,6 +399,11 @@ class PaymentService:
                         pd.total_amount,
                         pd.paid_amount,
                         pd.unpaid_amount,
+                        pd.arrival_payment_amount,
+                        pd.final_payment_amount,
+                        pd.arrival_paid_amount,
+                        pd.final_paid_amount,
+                        pd.collection_status,
                         pd.status,
                         pd.remark,
                         pd.created_by,
@@ -448,8 +453,8 @@ class PaymentService:
                         d.uploader_name as delivery_uploader_name,
                         d.uploaded_at as delivery_uploaded_at
                     FROM {PaymentService.TABLE_NAME} pd
-                    LEFT JOIN pd_weighbills wb ON pd.sales_order_id = wb.id
-                    LEFT JOIN pd_deliveries d ON wb.delivery_id = d.id
+                    LEFT JOIN pd_deliveries d ON d.id = COALESCE(pd.delivery_id, pd.sales_order_id)
+                    LEFT JOIN pd_weighbills wb ON wb.delivery_id = d.id
                     WHERE {where_sql}
                     ORDER BY pd.created_at DESC
                     LIMIT %s OFFSET %s
@@ -574,9 +579,8 @@ class PaymentService:
                         d.uploader_name as delivery_uploader_name,
                         d.uploaded_at as delivery_uploaded_at
                     FROM {PaymentService.TABLE_NAME} pd
-                    LEFT JOIN sales_orders so ON pd.sales_order_id = so.id
-                    LEFT JOIN pd_weighbills wb ON so.id = wb.sales_order_id
-                    LEFT JOIN pd_deliveries d ON wb.delivery_id = d.id
+                    LEFT JOIN pd_deliveries d ON d.id = COALESCE(pd.delivery_id, pd.sales_order_id)
+                    LEFT JOIN pd_weighbills wb ON wb.delivery_id = d.id
                     WHERE pd.id = %s
                     LIMIT 1
                 """
@@ -813,8 +817,8 @@ class PaymentService:
                         SUM(pd.net_weight) - SUM(CASE WHEN wb.id IS NOT NULL THEN wb.net_weight ELSE 0 END) as remaining_weight,
                         MAX(wb.weigh_date) as last_ship_date
                     FROM {PaymentService.TABLE_NAME} pd
-                    LEFT JOIN sales_orders so ON pd.sales_order_id = so.id
-                    LEFT JOIN pd_weighbills wb ON so.id = wb.sales_order_id
+                    LEFT JOIN pd_deliveries d ON d.id = COALESCE(pd.delivery_id, pd.sales_order_id)
+                    LEFT JOIN pd_weighbills wb ON wb.delivery_id = d.id
                     WHERE {where_sql}
                     GROUP BY pd.contract_no, pd.smelter_name
                     ORDER BY MAX(pd.created_at) DESC
@@ -1031,6 +1035,11 @@ class PaymentService:
                         pd.total_amount,
                         pd.paid_amount,
                         pd.unpaid_amount,
+                        pd.arrival_payment_amount,
+                        pd.final_payment_amount,
+                        pd.arrival_paid_amount,
+                        pd.final_paid_amount,
+                        pd.collection_status,
                         pd.status,
                         pd.remark,
                         pd.created_at,
@@ -1039,8 +1048,8 @@ class PaymentService:
                         wb.net_weight as shipped_weight,
                         (SELECT COUNT(*) FROM {PaymentService.RECORD_TABLE} pr WHERE pr.payment_detail_id = pd.id) as payment_record_count
                     FROM {PaymentService.TABLE_NAME} pd
-                    LEFT JOIN sales_orders so ON pd.sales_order_id = so.id
-                    LEFT JOIN pd_weighbills wb ON so.id = wb.sales_order_id
+                    LEFT JOIN pd_deliveries d ON d.id = COALESCE(pd.delivery_id, pd.sales_order_id)
+                    LEFT JOIN pd_weighbills wb ON wb.delivery_id = d.id
                     WHERE {where_sql}
                     ORDER BY pd.created_at DESC
                     LIMIT %s OFFSET %s

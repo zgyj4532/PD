@@ -68,12 +68,19 @@ class BalanceOut(BaseModel):
     driver_name: Optional[str] = None
     driver_phone: Optional[str] = None
     payee_name: Optional[str] = None
+    payee_account: Optional[str] = None
     vehicle_no: Optional[str] = None
+    purchase_unit_price: Optional[float] = None
     payable_amount: Optional[float] = None
     paid_amount: Optional[float] = None
     balance_amount: Optional[float] = None
     payment_status: int = 0
     payment_status_name: Optional[str] = None  # 新增
+    payout_status: Optional[int] = None
+    payout_status_name: Optional[str] = None
+    schedule_date: Optional[str] = None
+    schedule_status: Optional[int] = None
+    schedule_status_name: Optional[str] = None
     created_at: Optional[str] = None
     # 关联的磅单字段
     weighbill_image: Optional[str] = None  # 新增

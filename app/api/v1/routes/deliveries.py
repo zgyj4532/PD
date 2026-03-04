@@ -72,6 +72,8 @@ class DeliveryOut(BaseModel):
     delivery_order_upload_status: Optional[str] = None  # 兼容字段
     source_type: Optional[str] = None
     shipper: Optional[str] = None
+    reporter_id: Optional[int] = None
+    reporter_name: Optional[str] = None
     payee: Optional[str] = None
     service_fee: Optional[float] = None
     contract_no: Optional[str] = None

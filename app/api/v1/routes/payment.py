@@ -105,6 +105,11 @@ class PaymentResp(BaseModel):
     total_amount: float
     paid_amount: float
     unpaid_amount: float
+    arrival_payment_amount: Optional[float] = None
+    final_payment_amount: Optional[float] = None
+    arrival_paid_amount: Optional[float] = None
+    final_paid_amount: Optional[float] = None
+    collection_status: Optional[int] = None
     status: int
     status_name: str
     remark: Optional[str]
@@ -239,6 +244,11 @@ class ContractOrderDetail(BaseModel):
     total_amount: float
     paid_amount: float
     unpaid_amount: float
+    arrival_payment_amount: Optional[float] = None
+    final_payment_amount: Optional[float] = None
+    arrival_paid_amount: Optional[float] = None
+    final_paid_amount: Optional[float] = None
+    collection_status: Optional[int] = None
     status: int
     status_name: Optional[str]
     remark: Optional[str]
