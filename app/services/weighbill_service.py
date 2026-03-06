@@ -287,6 +287,30 @@ class WeighbillService:
             logger.error(f"获取品种单价失败: {e}")
             return None
 
+    # ========== 新增：获取报单信息方法 ==========
+    def get_delivery_info(self, delivery_id: int) -> Optional[Dict[str, Any]]:
+        """获取报单信息（用于创建收款明细）"""
+        try:
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT 
+                            d.*,
+                            t.target_factory_name
+                        FROM pd_deliveries d
+                        LEFT JOIN pd_target_factory t ON d.target_factory_id = t.id
+                        WHERE d.id = %s
+                    """, (delivery_id,))
+                    row = cur.fetchone()
+                    if not row:
+                        return None
+                    columns = [desc[0] for desc in cur.description]
+                    return dict(zip(columns, row))
+        except Exception as e:
+            logger.error(f"获取报单信息失败: {e}")
+            return None
+    # ========== 新增结束 ==========
+
     # ========== 报单匹配 ==========
 
     def match_delivery_info(self, weigh_date: str, vehicle_no: str) -> Optional[Dict]:

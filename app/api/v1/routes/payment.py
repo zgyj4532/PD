@@ -81,6 +81,12 @@ class UpdatePaymentReq(BaseModel):
     remark: Optional[str] = Field(None, description="备注")
 
 
+class UpdatePaymentStatusReq(BaseModel):
+    """手动更新付款状态请求"""
+    is_paid: Optional[int] = Field(None, description="是否回款：0-否, 1-是")
+    is_paid_out: Optional[int] = Field(None, description="是否支付：0-待打款, 1-已打款")
+
+
 class PaymentListQuery(BaseModel):
     """收款明细列表查询参数"""
     page: int = Field(1, ge=1, description="页码")
@@ -94,9 +100,10 @@ class PaymentListQuery(BaseModel):
 
 
 class PaymentResp(BaseModel):
-    """收款明细响应"""
+    """收款明细响应 - 包含打款信息列表所需全部字段"""
     model_config = ConfigDict(from_attributes=True)
 
+    # ========== 基础信息 ==========
     id: int
     sales_order_id: int
     smelter_name: str
@@ -105,8 +112,15 @@ class PaymentResp(BaseModel):
     unit_price: float
     net_weight: float
     total_amount: float
-    paid_amount: float
+    paid_amount: float                    # 已打款金额
     unpaid_amount: float
+    status: int
+    status_name: str
+    remark: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    # ========== 回款阶段金额（用于收款明细） ==========
     arrival_payment_amount: Optional[float] = None
     final_payment_amount: Optional[float] = None
     arrival_paid_amount: Optional[float] = None
@@ -114,57 +128,51 @@ class PaymentResp(BaseModel):
     collection_status: Optional[int] = None
     collection_status_name: Optional[str] = None
     last_payment_date: Optional[str] = None
-    status: int
-    status_name: str
-    remark: Optional[str]
-    created_at: datetime
-    updated_at: datetime
 
-    # 是否回款状态（计算字段：已回款金额 > 0 则为是）
+    # ========== 支付状态字段（打款信息列表核心字段） ==========
     is_paid: Optional[int] = Field(None, description="是否回款：0-否, 1-是")
-    # 是否支付状态（计算字段：从磅单或关联表获取）
-    is_paid_out: Optional[int] = Field(None, description="是否支付：0-否, 1-是")
+    is_paid_out: Optional[int] = Field(None, description="是否支付：0-待打款, 1-已打款")
 
-    # 磅单字段
+    # ========== 排期信息（第一行） ==========
+    payment_schedule_date: Optional[str] = Field(None, description="排期日期")
+
+    # ========== 磅单字段（第二行信息） ==========
     weighbill_id: Optional[int] = None
-    weigh_date: Optional[str] = None
+    weigh_date: Optional[str] = Field(None, description="磅单日期")
     delivery_time: Optional[str] = None
-    weigh_ticket_no: Optional[str] = None
-    weighbill_vehicle_no: Optional[str] = None
-    weighbill_product_name: Optional[str] = None
+    weigh_ticket_no: Optional[str] = Field(None, description="过磅单号")
+    weighbill_vehicle_no: Optional[str] = Field(None, description="车号")
+    weighbill_product_name: Optional[str] = Field(None, description="品种")
     gross_weight: Optional[float] = None
     tare_weight: Optional[float] = None
-    weighbill_net_weight: Optional[float] = None
-    weighbill_unit_price: Optional[float] = None
-    weighbill_total_amount: Optional[float] = None
+    weighbill_net_weight: Optional[float] = Field(None, description="净重")
+    weighbill_unit_price: Optional[float] = Field(None, description="采购单价")
+    weighbill_total_amount: Optional[float] = Field(None, description="应打款金额")
     weighbill_image: Optional[str] = None
     ocr_status: Optional[str] = None
     is_manual_corrected: Optional[int] = None
-    payment_schedule_date: Optional[str] = None
     weighbill_uploader_id: Optional[int] = None
     weighbill_uploader_name: Optional[str] = None
     weighbill_uploaded_at: Optional[str] = None
 
-    # 销售台账/报货订单字段
+    # ========== 销售台账/报货订单字段（第一行信息） ==========
     delivery_id: Optional[int] = None
-    report_date: Optional[str] = None
+    report_date: Optional[str] = Field(None, description="报单日期")
     warehouse: Optional[str] = None
     target_factory_id: Optional[int] = None
-    target_factory_name: Optional[str] = None
+    target_factory_name: Optional[str] = Field(None, description="报送冶炼厂")
     delivery_quantity: Optional[float] = None
     delivery_vehicle_no: Optional[str] = None
-    driver_name: Optional[str] = None
-    driver_phone: Optional[str] = None
-    driver_id_card: Optional[str] = None
-    has_delivery_order: Optional[str] = None
+    driver_name: Optional[str] = Field(None, description="司机姓名")
+    driver_phone: Optional[str] = Field(None, description="司机电话")
+    driver_id_card: Optional[str] = Field(None, description="身份证号")
+    has_delivery_order: Optional[str] = Field(None, description="是否自带联单：是/否")
     delivery_order_image: Optional[str] = None
-    delivery_upload_status: Optional[str] = None
+    delivery_upload_status: Optional[str] = Field(None, description="是否上传联单：已上传/未上传")
     source_type: Optional[str] = None
-    shipper: Optional[str] = None
-    payee: Optional[str] = None
+    shipper: Optional[str] = Field(None, description="报单人/发货人（大区经理、仓库）")
     service_fee: Optional[float] = None
-    # 联单费（计算字段：无联单时为150，有联单时为service_fee）
-    delivery_fee: Optional[float] = None
+    delivery_fee: Optional[float] = Field(None, description="联单费：无联单时为150，有联单时为service_fee")
     delivery_contract_no: Optional[str] = None
     delivery_contract_unit_price: Optional[float] = None
     delivery_total_amount: Optional[float] = None
@@ -173,9 +181,13 @@ class PaymentResp(BaseModel):
     delivery_uploader_name: Optional[str] = None
     delivery_uploaded_at: Optional[str] = None
 
+    # ========== 收款人信息 ==========
+    payee: Optional[str] = Field(None, description="收款人")
+    payee_account: Optional[str] = Field(None, description="收款人账号")
+
 
 class PaymentListResp(BaseModel):
-    """收款明细列表响应"""
+    """收款明细列表响应 - 用于打款信息列表"""
     total: int
     page: int
     size: int
@@ -361,22 +373,31 @@ def create_payment_detail(
         raise HTTPException(status_code=500, detail="创建收款明细失败")
 
 
-@router.get("/details", summary="收款明细列表", response_model=PaymentListResp)
+@router.get("/details", summary="回款列表（打款信息列表）", response_model=dict)
 def list_payment_details(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(20, ge=1, le=100, description="每页数量"),
-    status: Optional[int] = Query(None, ge=0, le=3, description="状态筛选"),
+    status: Optional[int] = Query(None, ge=0, le=3, description="回款明细状态筛选"),
     smelter_name: Optional[str] = Query(None, description="冶炼厂名称"),
     contract_no: Optional[str] = Query(None, description="合同编号"),
     start_date: Optional[date] = Query(None, description="开始日期"),
     end_date: Optional[date] = Query(None, description="结束日期"),
     keyword: Optional[str] = Query(None, description="关键词搜索"),
+    # 新增筛选参数
+    is_paid: Optional[int] = Query(None, ge=0, le=1, description="回款状态筛选：0-未回款, 1-已回款"),
+    is_paid_out: Optional[int] = Query(None, ge=0, le=1, description="打款状态筛选：0-待打款, 1-已打款"),
+    payment_schedule_date: Optional[str] = Query(None, description="排期日期筛选"),
     current_user: dict = Depends(get_current_user)
 ):
     """
-    获取收款明细列表（支持分页、筛选）
-
-    支持按状态、冶炼厂、合同号、日期范围筛选
+    获取回款列表（打款信息列表）
+    
+    按排期日期分组展示，包含三行信息：
+    - 第一行：排期日期、合同编号、报单日期、报送冶炼厂、司机电话、司机姓名、车号、身份证号、品种、是否自带联单、是否上传联单、报单人/发货人
+    - 第二行：磅单日期、过磅单号、净重、采购单价、联单费、应打款金额、已打款金额、收款人、收款人账号
+    - 第三行：打款状态、回款状态、操作
+    
+    支持按回款状态、打款状态、排期日期筛选
     """
     check_finance_permission(current_user)
 
@@ -389,14 +410,16 @@ def list_payment_details(
             contract_no=contract_no,
             start_date=start_date,
             end_date=end_date,
-            keyword=keyword
+            keyword=keyword,
+            is_paid=is_paid,
+            is_paid_out=is_paid_out,
+            payment_schedule_date=payment_schedule_date
         )
         return result
 
     except Exception as e:
-        logger.exception("查询收款明细列表异常")
+        logger.exception("查询回款列表异常")
         raise HTTPException(status_code=500, detail="查询失败")
-
 
 @router.get("/details/{payment_id}", summary="收款明细详情", response_model=PaymentDetailResp)
 def get_payment_detail(
@@ -444,6 +467,38 @@ def update_payment_detail(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("更新收款明细异常")
+        raise HTTPException(status_code=500, detail="更新失败")
+
+
+@router.put("/details/{payment_id}/status", summary="手动更新付款状态")
+def update_payment_status(
+    payment_id: int,
+    body: UpdatePaymentStatusReq,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    手动更新付款状态（支持人工干预）
+    
+    - is_paid: 是否回款（0-否, 1-是）
+    - is_paid_out: 是否支付（0-待打款, 1-已打款）
+    
+    注意：此接口用于人工修正状态，正常情况下状态由系统自动更新
+    """
+    check_finance_permission(current_user)
+
+    try:
+        result = PaymentService.update_payment_status(
+            payment_id=payment_id,
+            is_paid=body.is_paid,
+            is_paid_out=body.is_paid_out,
+            updated_by=current_user.get("id")
+        )
+        return {"msg": "状态更新成功", "data": result}
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("更新付款状态异常")
         raise HTTPException(status_code=500, detail="更新失败")
 
 
@@ -599,12 +654,17 @@ def record_payment(
     """
     录入回款记录（支持分段收款）
 
+    录入后会自动：
+    1. 更新收款明细的已回款金额
+    2. 更新付款状态 is_paid = 1（已回首笔款）
+    3. 补全之前缺失的回款相关字段
+    
     Args:
         body: 回款记录请求体
         current_user: 当前用户信息
 
     Returns:
-        录入结果信息
+        录入结果信息（包含完整的收款明细信息）
     """
     check_finance_permission(current_user)
 
@@ -619,9 +679,16 @@ def record_payment(
             remark=body.remark,
             recorded_by=current_user.get("id")
         )
+        
+        # 返回完整的收款明细信息
+        full_detail = PaymentService.get_payment_detail(body.payment_detail_id)
+        
         return {
             "msg": "回款记录录入成功",
-            "data": result
+            "data": {
+                "record_result": result,
+                "payment_detail": full_detail
+            }
         }
 
     except ValueError as e:

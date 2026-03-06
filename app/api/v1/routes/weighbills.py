@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, ValidationError
 from app.core.paths import TEMP_UPLOADS_DIR, UPLOADS_DIR
 from app.services.weighbill_service import WeighbillService, get_weighbill_service
 from app.services.contract_service import get_conn
+from app.services.payment_services import PaymentService
 from core.auth import get_current_user
 
 router = APIRouter(prefix="/weighbills", tags=["磅单管理"])
@@ -227,6 +228,46 @@ async def upload_weighbill(
         )
 
         if result["success"]:
+            # ========== 新增：自动创建/更新收款明细 ==========
+            try:
+                from app.services.payment_services import PaymentService, calculate_payment_amount
+                from decimal import Decimal
+                
+                # 获取报单信息（用于获取冶炼厂、收款人等）
+                delivery_info = service.get_delivery_info(delivery_id)
+                
+                weighbill_id = result["data"].get("id")
+                calculated_amount = None
+                if final_unit_price and net_weight:
+                    calculated_amount = calculate_payment_amount(
+                        Decimal(str(final_unit_price)), 
+                        Decimal(str(net_weight))
+                    )
+                
+                # 创建或更新收款明细
+                PaymentService.create_or_update_by_weighbill(
+                    weighbill_id=weighbill_id,
+                    delivery_id=delivery_id,
+                    contract_no=contract_no or data.get("contract_no", ""),
+                    smelter_name=delivery_info.get("target_factory_name", "") if delivery_info else "",
+                    material_name=product_name,
+                    unit_price=Decimal(str(final_unit_price)) if final_unit_price else None,
+                    net_weight=Decimal(str(net_weight)) if net_weight else None,
+                    total_amount=calculated_amount,
+                    payee=delivery_info.get("payee", "") if delivery_info else "",
+                    payee_account="",  # 如有账号字段从delivery_info获取
+                    created_by=current_user.get("id")
+                )
+                
+                # 将收款明细ID添加到返回结果中
+                result["data"]["payment_detail_created"] = True
+                
+            except Exception as e:
+                logger.warning(f"自动创建收款明细失败: {e}")
+                result["data"]["payment_detail_created"] = False
+                result["data"]["payment_detail_error"] = str(e)
+            # ========== 新增结束 ==========
+            
             return result
         else:
             raise HTTPException(status_code=400, detail=result.get("error"))
@@ -294,6 +335,47 @@ async def modify_weighbill(
         )
 
         if result["success"]:
+            # ========== 新增：更新收款明细 ==========
+            try:
+                from app.services.payment_services import PaymentService, calculate_payment_amount
+                from decimal import Decimal
+                
+                delivery_id = existing.get('delivery_id')
+                delivery_info = service.get_delivery_info(delivery_id)
+                
+                final_unit_price = data.get('unit_price') or existing.get('unit_price')
+                final_net_weight = data.get('net_weight') or existing.get('net_weight')
+                final_contract_no = data.get('contract_no') or existing.get('contract_no')
+                
+                calculated_amount = None
+                if final_unit_price and final_net_weight:
+                    calculated_amount = calculate_payment_amount(
+                        Decimal(str(final_unit_price)), 
+                        Decimal(str(final_net_weight))
+                    )
+                
+                # 更新收款明细
+                PaymentService.create_or_update_by_weighbill(
+                    weighbill_id=weighbill_id,
+                    delivery_id=delivery_id,
+                    contract_no=final_contract_no,
+                    smelter_name=delivery_info.get("target_factory_name", "") if delivery_info else "",
+                    material_name=final_product,
+                    unit_price=Decimal(str(final_unit_price)) if final_unit_price else None,
+                    net_weight=Decimal(str(final_net_weight)) if final_net_weight else None,
+                    total_amount=calculated_amount,
+                    payee=delivery_info.get("payee", "") if delivery_info else "",
+                    payee_account="",
+                    created_by=current_user.get("id")
+                )
+                
+                result["data"]["payment_detail_updated"] = True
+                
+            except Exception as e:
+                logger.warning(f"更新收款明细失败: {e}")
+                result["data"]["payment_detail_updated"] = False
+            # ========== 新增结束 ==========
+            
             return {"success": True, "message": "磅单修改成功", "data": result.get("data")}
         else:
             raise HTTPException(status_code=400, detail=result.get("error"))
