@@ -94,7 +94,8 @@ class BalanceService:
                             d.driver_name,
                             d.driver_phone,
                             d.payee,
-                            d.uploader_id
+                            d.uploader_id,
+                            d.upload_status
                         FROM pd_weighbills w
                         LEFT JOIN pd_deliveries d ON w.delivery_id = d.id
                         WHERE {where_sql}
@@ -119,8 +120,9 @@ class BalanceService:
                         cur.execute("""
                             INSERT INTO pd_balance_details 
                             (contract_no, delivery_id, weighbill_id, driver_name, driver_phone,
-                             vehicle_no, payee_id, payable_amount, paid_amount, balance_amount, payment_status)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                             vehicle_no, payee_id, payable_amount, paid_amount, balance_amount, payment_status,
+                             upload_status)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """, (
                             data.get('contract_no'),
                             data.get('delivery_id'),
@@ -132,7 +134,8 @@ class BalanceService:
                             payable,  # 应付金额
                             0,  # 已付金额
                             payable,  # 结余金额
-                            self.PAY_STATUS_PENDING
+                            self.PAY_STATUS_PENDING,
+                            data.get('upload_status')
                         ))
 
                         generated.append({
