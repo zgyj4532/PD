@@ -21,7 +21,6 @@ router = APIRouter(prefix="/deliveries", tags=["销售台账/报货订单"])
 
 class DeliveryCreateRequest(BaseModel):
     report_date: str = Field(..., description="报货日期")
-    warehouse: Optional[str] = Field(None, description="送货库房")
     target_factory_id: Optional[int] = Field(None, description="目标工厂ID")
     target_factory_name: str = Field(..., description="目标工厂名称")
     product_name: str = Field(..., description="货物品种")
@@ -31,7 +30,6 @@ class DeliveryCreateRequest(BaseModel):
     driver_phone: str = Field(..., description="司机电话")
     driver_id_card: Optional[str] = Field(None, description="身份证号")
     has_delivery_order: str = Field("无", description="是否有联单：有/无")
-    payee: Optional[str] = Field(None, description="收款人")
     status: str = Field("待确认", description="状态")
     uploaded_by: Optional[str] = Field(None, description="上传者身份：司机/公司（用于判断来源）")
     reporter_id: Optional[int] = Field(None, description="报单人ID（关联pd_users.id）")  # 新增
@@ -40,7 +38,6 @@ class DeliveryCreateRequest(BaseModel):
 
 class DeliveryUpdateRequest(BaseModel):
     report_date: Optional[str] = None
-    warehouse: Optional[str] = None
     target_factory_id: Optional[int] = None
     target_factory_name: Optional[str] = None
     product_name: Optional[str] = None
@@ -50,7 +47,6 @@ class DeliveryUpdateRequest(BaseModel):
     driver_phone: Optional[str] = None
     driver_id_card: Optional[str] = None
     has_delivery_order: Optional[str] = None
-    payee: Optional[str] = None
     status: Optional[str] = None
     uploaded_by: Optional[str] = None
     reporter_id: Optional[int] = None  # 新增
@@ -96,7 +92,6 @@ class DeliveryOut(BaseModel):
 @router.post("/", response_model=dict)
 async def create_delivery(
         report_date: str = Form(...),
-        warehouse: Optional[str] = Form(None),
         target_factory_id: Optional[int] = Form(None),
         target_factory_name: str = Form(...),
         product_name: str = Form(..., description="主品种，随便填"),
@@ -107,7 +102,6 @@ async def create_delivery(
         driver_phone: str = Form(...),
         driver_id_card: Optional[str] = Form(None),
         has_delivery_order: str = Form("无"),
-        payee: Optional[str] = Form(None),
         status: str = Form("待确认"),
         uploaded_by: Optional[str] = Form(None),
         reporter_id: Optional[int] = Form(None, description="报单人ID"),  # 新增
@@ -121,7 +115,6 @@ async def create_delivery(
     try:
         data = {
             "report_date": report_date,
-            "warehouse": warehouse,
             "target_factory_id": target_factory_id,
             "target_factory_name": target_factory_name,
             "product_name": product_name,
@@ -132,7 +125,6 @@ async def create_delivery(
             "driver_phone": driver_phone,
             "driver_id_card": driver_id_card,
             "has_delivery_order": has_delivery_order,
-            "payee": payee,
             "status": status,
             "uploaded_by": uploaded_by,
             "reporter_id": reporter_id,
@@ -171,7 +163,6 @@ async def create_delivery(
 class DeliveryCreateJsonRequest(BaseModel):
     """JSON 格式创建报货订单请求体"""
     report_date: str = Field(..., description="报货日期")
-    warehouse: Optional[str] = Field(None, description="送货库房")
     target_factory_id: Optional[int] = Field(None, description="目标工厂ID")
     target_factory_name: str = Field(..., description="目标工厂名称")
     product_name: str = Field(..., description="主品种")
@@ -182,7 +173,6 @@ class DeliveryCreateJsonRequest(BaseModel):
     driver_phone: str = Field(..., description="司机电话")
     driver_id_card: Optional[str] = Field(None, description="身份证号")
     has_delivery_order: str = Field("无", description="是否有联单：有/无")
-    payee: Optional[str] = Field(None, description="收款人")
     status: str = Field("待确认", description="状态")
     uploaded_by: Optional[str] = Field(None, description="上传者身份：司机/公司")
     reporter_id: Optional[int] = Field(None, description="报单人ID")

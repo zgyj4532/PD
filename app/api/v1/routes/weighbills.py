@@ -192,6 +192,8 @@ async def upload_weighbill(
         net_weight: float = Form(..., description="净重"),
         delivery_time: Optional[str] = Form(None, description="送货时间"),
         unit_price: Optional[float] = Form(None, description="单价（不传则自动获取）"),
+        warehouse: Optional[str] = Form(None, description="送货库房"),
+        payee: Optional[str] = Form(None, description="收款人"),
         is_manual: bool = Form(False, description="是否人工修正"),
         weighbill_image: UploadFile = File(..., description="磅单图片"),
         service: WeighbillService = Depends(get_weighbill_service),
@@ -214,6 +216,8 @@ async def upload_weighbill(
             "net_weight": net_weight,
             "delivery_time": delivery_time,
             "unit_price": final_unit_price,
+            "warehouse": warehouse,
+            "payee": payee,
         }
 
         image_bytes = await weighbill_image.read()
@@ -311,6 +315,8 @@ async def modify_weighbill(
         net_weight: Optional[float] = Form(None, description="净重"),
         delivery_time: Optional[str] = Form(None, description="送货时间"),
         unit_price: Optional[float] = Form(None, description="单价"),
+    warehouse: Optional[str] = Form(None, description="送货库房"),
+    payee: Optional[str] = Form(None, description="收款人"),
         is_manual: bool = Form(True, description="是否人工修正"),
         weighbill_image: Optional[UploadFile] = File(None, description="新的磅单图片（可选）"),
         service: WeighbillService = Depends(get_weighbill_service),
@@ -325,7 +331,8 @@ async def modify_weighbill(
         # 构建更新数据
         data = {}
         fields = ['weigh_date', 'weigh_ticket_no', 'contract_no', 'vehicle_no',
-                  'gross_weight', 'tare_weight', 'net_weight', 'delivery_time', 'unit_price']
+              'gross_weight', 'tare_weight', 'net_weight', 'delivery_time', 'unit_price',
+              'warehouse', 'payee']
 
         for f in fields:
             value = locals().get(f)

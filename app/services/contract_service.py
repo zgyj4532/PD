@@ -6,7 +6,7 @@ import os
 import re
 import logging
 import tempfile
-from decimal import Decimal
+from decimal import Decimal, ROUND_FLOOR
 from typing import List, Dict, Optional, Any, Tuple
 from contextlib import contextmanager
 from datetime import datetime, timedelta, date
@@ -202,7 +202,7 @@ class ContractService:
         if total_quantity is None:
             return None
         try:
-            return (Decimal(str(total_quantity)) / Decimal("35")).quantize(Decimal("0.01"))
+            return (Decimal(str(total_quantity)) / Decimal("35")).to_integral_value(rounding=ROUND_FLOOR)
         except Exception:
             return None
 

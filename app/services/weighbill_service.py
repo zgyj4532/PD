@@ -415,6 +415,21 @@ class WeighbillService:
                     existing_weighbill_id = delivery_info.get('existing_weighbill_id')
                     existing_image = delivery_info.get('weighbill_image')
 
+                    delivery_updates = {}
+                    if "warehouse" in data and data.get("warehouse") is not None:
+                        delivery_updates["warehouse"] = data.get("warehouse")
+                    if "payee" in data and data.get("payee") is not None:
+                        delivery_updates["payee"] = data.get("payee")
+
+                    if delivery_updates:
+                        update_fields = [f"{k} = %s" for k in delivery_updates.keys()]
+                        params = list(delivery_updates.values()) + [delivery_id]
+                        cur.execute(
+                            f"UPDATE pd_deliveries SET {', '.join(update_fields)} WHERE id = %s",
+                            tuple(params)
+                        )
+                        delivery_info.update(delivery_updates)
+
                     # 操作人信息
                     uploader_id = None
                     uploader_name = "system"
