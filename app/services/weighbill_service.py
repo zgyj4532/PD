@@ -563,7 +563,7 @@ class WeighbillService:
                     data = dict(zip(columns, row))
 
                     # 转换时间
-                    for key in ["weigh_date", "delivery_time", "created_at", "updated_at", "uploaded_at", "payment_schedule_date"]:
+                    for key in ["weigh_date", "delivery_time", "created_at", "updated_at", "uploaded_at", "payment_schedule_date", "report_date"]:
                         if data.get(key):
                             data[key] = str(data[key])
 
