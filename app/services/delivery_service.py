@@ -5,7 +5,7 @@
 import logging
 import os
 import re
-from decimal import Decimal
+from decimal import Decimal, ROUND_FLOOR
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
@@ -84,12 +84,12 @@ class DeliveryService:
 
     def _calculate_trucks(self, quantity: Decimal) -> int:
         """
-        计算车数（向上取整）
-        车数 = ceil(quantity / 35)
+        计算车数（向下取整）
+        车数 = floor(quantity / 35)
         """
         if quantity <= 0:
             return 1
-        return int((quantity / STANDARD_TRUCK_CAPACITY).to_integral_value(rounding=ROUND_CEILING))
+        return int((quantity / STANDARD_TRUCK_CAPACITY).to_integral_value(rounding=ROUND_FLOOR))
 
     def _match_contract_with_truck_check(self, factory_name: str,
                                           product_name: str,
