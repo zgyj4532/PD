@@ -5,18 +5,15 @@
 import logging
 import os
 import re
-import shutil
-from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
-from pathlib import Path
+from decimal import Decimal, ROUND_FLOOR
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
-
-from app.services.contract_service import get_conn
-from app.services.customer_service import CustomerService
+from datetime import datetime
+from app.core.paths import UPLOADS_DIR
+from core.database import get_conn
 
 logger = logging.getLogger(__name__)
 
-from app.core.paths import UPLOADS_DIR
+
 
 # 使用绝对路径，避免工作目录变化导致的问题
 UPLOAD_DIR = UPLOADS_DIR / "delivery_orders"
@@ -87,12 +84,12 @@ class DeliveryService:
 
     def _calculate_trucks(self, quantity: Decimal) -> int:
         """
-        计算车数（向上取整）
-        车数 = ceil(quantity / 35)
+        计算车数（向下取整）
+        车数 = floor(quantity / 35)
         """
         if quantity <= 0:
             return 1
-        return int((quantity / STANDARD_TRUCK_CAPACITY).to_integral_value(rounding=ROUND_CEILING))
+        return int((quantity / STANDARD_TRUCK_CAPACITY).to_integral_value(rounding=ROUND_FLOOR))
 
     def _match_contract_with_truck_check(self, factory_name: str,
                                           product_name: str,
@@ -156,8 +153,9 @@ class DeliveryService:
                     skipped_contracts = []  # 记录车数不足被跳过的合同
 
                     for idx, contract in enumerate(matching_contracts):
-                        contract_no, unit_price, total_qty, contract_trucks = contract
-                        contract_trucks = int(contract_trucks)
+                        contract_no = contract.get("contract_no")
+                        unit_price = contract.get("unit_price")
+                        contract_trucks = int(contract.get("contract_trucks") or 0)
 
                         # 统计该合同已匹配的报单车数总和
                         cur.execute("""
@@ -495,7 +493,7 @@ class DeliveryService:
             is_last_delivery = match_result['is_last_delivery']
 
             # 计算总价
-            total_amount = float(unit_price * quantity) if (unit_price and quantity) else None
+            total_amount = float(Decimal(str(unit_price)) * quantity) if (unit_price and quantity) else None
 
             logger.info(f"【DEBUG】匹配成功: contract_no={contract_no}, "
                        f"unit_price={unit_price}, is_last_delivery={is_last_delivery}, "
@@ -945,8 +943,8 @@ class DeliveryService:
 
                     where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
 
-                    cur.execute(f"SELECT COUNT(*) FROM pd_deliveries {where_sql}", tuple(params))
-                    total = cur.fetchone()[0]
+                    cur.execute(f"SELECT COUNT(*) as total FROM pd_deliveries {where_sql}", tuple(params))
+                    total = cur.fetchone()["total"]
 
                     offset = (page - 1) * page_size
                     cur.execute(f"""
@@ -956,11 +954,10 @@ class DeliveryService:
                         LIMIT %s OFFSET %s
                     """, tuple(params + [page_size, offset]))
 
-                    columns = [desc[0] for desc in cur.description]
                     rows = cur.fetchall()
                     data = []
                     for row in rows:
-                        item = dict(zip(columns, row))
+                        item = dict(row)
                         for key in ['report_date', 'created_at', 'updated_at', 'uploaded_at']:
                             if item.get(key):
                                 item[key] = str(item[key])

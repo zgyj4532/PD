@@ -6,7 +6,7 @@ from enum import IntEnum
 from fastapi.security import HTTPBearer
 from core.database import get_conn
 from core.logging import get_logger
-from core.table_access import build_dynamic_select, _quote_identifier
+from core.table_access import build_dynamic_select
 from core.auth import create_access_token, get_current_user
 from services.pd_auth_service import (
     AuthService, 
