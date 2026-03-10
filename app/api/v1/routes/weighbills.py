@@ -4,7 +4,7 @@
 import logging
 import os
 import shutil
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query, Form
 from fastapi.responses import FileResponse
