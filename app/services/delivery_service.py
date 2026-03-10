@@ -26,6 +26,26 @@ STANDARD_TRUCK_CAPACITY = Decimal('35')
 class DeliveryService:
     """报货订单服务"""
 
+    def _normalize_has_delivery_order(self, value: Optional[str]) -> Optional[str]:
+        """将联单状态统一为数据库可接受值：有/无。"""
+        if value is None:
+            return None
+
+        raw = str(value).strip()
+        if raw == "":
+            return None
+
+        positive = {"有", "是", "true", "1", "yes", "y", "已上传", "uploaded"}
+        negative = {"无", "否", "false", "0", "no", "n", "未上传", "pending"}
+
+        low = raw.lower()
+        if raw in positive or low in positive:
+            return "有"
+        if raw in negative or low in negative:
+            return "无"
+
+        return raw
+
     def _delivery_has_products_column(self) -> bool:
         """兼容旧库：动态检测 pd_deliveries 是否存在 products 列。"""
         cached = getattr(self, "_products_column_exists", None)
@@ -249,8 +269,12 @@ class DeliveryService:
                     """, (contract_no, product_name))
 
                     row = cur.fetchone()
-                    if row and row[0]:
-                        return float(row[0])
+                    if not row:
+                        return None
+
+                    unit_price = row.get('unit_price') if isinstance(row, dict) else row[0]
+                    if unit_price is not None:
+                        return float(unit_price)
                     return None
         except Exception as e:
             logger.error(f"获取品种单价失败: {e}")
@@ -336,12 +360,20 @@ class DeliveryService:
                         ORDER BY created_at DESC
                     """, tuple(params))
 
-                    columns = [desc[0] for desc in cur.description]
                     rows = cur.fetchall()
 
                     existing_orders = []
                     for row in rows:
-                        order = dict(zip(columns, row))
+                        order = dict(row) if isinstance(row, dict) else {
+                            'id': row[0],
+                            'contract_no': row[1],
+                            'report_date': row[2],
+                            'vehicle_no': row[3],
+                            'driver_name': row[4],
+                            'driver_phone': row[5],
+                            'driver_id_card': row[6],
+                            'created_at': row[7],
+                        }
                         for key in ['report_date', 'created_at']:
                             if order.get(key):
                                 order[key] = str(order[key])
@@ -409,7 +441,10 @@ class DeliveryService:
             logger.info(f"【DEBUG】create_delivery 开始，data={data}, current_user={current_user}")
 
             # 处理来源类型
-            has_order = data.get('has_delivery_order', '无')
+            has_order = self._normalize_has_delivery_order(data.get('has_delivery_order', '无'))
+            if has_order not in ('有', '无'):
+                return {"success": False, "error": "has_delivery_order 仅支持：有/无（或 是/否）"}
+            data['has_delivery_order'] = has_order
             uploaded_by = data.get('uploaded_by')
             source_type = self._determine_source_type(has_order, uploaded_by)
             data['source_type'] = source_type
@@ -673,9 +708,22 @@ class DeliveryService:
                     if not old:
                         return {"success": False, "error": f"订单ID {delivery_id} 不存在"}
 
-                    old_has_order, old_image_path, old_upload_status, old_driver_phone, old_driver_id_card, old_planned_trucks, old_contract_no = old
+                    if isinstance(old, dict):
+                        old_has_order = old.get('has_delivery_order')
+                        old_image_path = old.get('delivery_order_image')
+                        old_upload_status = old.get('upload_status')
+                        old_driver_phone = old.get('driver_phone')
+                        old_driver_id_card = old.get('driver_id_card')
+                        old_planned_trucks = old.get('planned_trucks')
+                        old_contract_no = old.get('contract_no')
+                    else:
+                        old_has_order, old_image_path, old_upload_status, old_driver_phone, old_driver_id_card, old_planned_trucks, old_contract_no = old
 
-                    has_order = data.get('has_delivery_order', old_has_order)
+                    has_order = self._normalize_has_delivery_order(data.get('has_delivery_order', old_has_order))
+                    if has_order not in ('有', '无'):
+                        return {"success": False, "error": "has_delivery_order 仅支持：有/无（或 是/否）"}
+                    if 'has_delivery_order' in data:
+                        data['has_delivery_order'] = has_order
                     if 'has_delivery_order' in data or uploaded_by:
                         data['uploaded_by'] = uploaded_by
                         data['source_type'] = self._determine_source_type(has_order, uploaded_by)
@@ -791,8 +839,9 @@ class DeliveryService:
                     if not row:
                         return None
 
-                    columns = [desc[0] for desc in cur.description]
-                    data = dict(zip(columns, row))
+                    data = dict(row) if isinstance(row, dict) else {
+                        desc[0]: row[idx] for idx, desc in enumerate(cur.description)
+                    }
 
                     for key in ['report_date', 'created_at', 'updated_at', 'uploaded_at']:
                         if data.get(key):
@@ -821,12 +870,21 @@ class DeliveryService:
 
                     weighbills = []
                     for w_row in cur.fetchall():
-                        weighbill = {
+                        wb = dict(w_row) if isinstance(w_row, dict) else {
                             'id': w_row[0],
                             'product_name': w_row[1],
-                            'is_last_for_contract': bool(w_row[2]),
-                            'net_weight': float(w_row[3]) if w_row[3] else None,
-                            'status': w_row[5] or w_row[4]
+                            'is_last_truck_for_contract': w_row[2],
+                            'net_weight': w_row[3],
+                            'upload_status': w_row[4],
+                            'ocr_status': w_row[5],
+                            'weigh_date': w_row[6],
+                        }
+                        weighbill = {
+                            'id': wb.get('id'),
+                            'product_name': wb.get('product_name'),
+                            'is_last_for_contract': bool(wb.get('is_last_truck_for_contract')),
+                            'net_weight': float(wb.get('net_weight')) if wb.get('net_weight') else None,
+                            'status': wb.get('ocr_status') or wb.get('upload_status')
                         }
                         weighbills.append(weighbill)
 
@@ -1007,7 +1065,7 @@ class DeliveryService:
                     # 先删除关联磅单图片
                     cur.execute("SELECT weighbill_image FROM pd_weighbills WHERE delivery_id = %s", (delivery_id,))
                     for row in cur.fetchall():
-                        image_path = row[0]
+                        image_path = row.get('weighbill_image') if isinstance(row, dict) else row[0]
                         if image_path and os.path.exists(image_path):
                             try:
                                 os.remove(image_path)
@@ -1018,8 +1076,8 @@ class DeliveryService:
                     cur.execute("SELECT delivery_order_image FROM pd_deliveries WHERE id = %s", (delivery_id,))
                     row = cur.fetchone()
 
-                    if row and row[0]:
-                        image_path = row[0]
+                    image_path = row.get('delivery_order_image') if isinstance(row, dict) else (row[0] if row else None)
+                    if image_path:
                         cur.execute("DELETE FROM pd_deliveries WHERE id = %s", (delivery_id,))
 
                         if os.path.exists(image_path):

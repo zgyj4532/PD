@@ -305,8 +305,26 @@ async def update_balance_payment(
     - 0 < 已打款金额 < 应付金额 → 部分支付
     """
     try:
+        resolved_balance_id = balance_id
+
         # 先检查结余明细是否存在
-        result = service.recalculate_balance(balance_id)
+        result = service.recalculate_balance(resolved_balance_id)
+        if not result["success"]:
+            # 兼容前端误传 payment_detail_id：通过磅单ID映射到 balance_id
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT weighbill_id FROM pd_payment_details WHERE id = %s", (balance_id,))
+                    row = cur.fetchone()
+                    if row and row[0]:
+                        cur.execute(
+                            "SELECT id FROM pd_balance_details WHERE weighbill_id = %s ORDER BY id DESC LIMIT 1",
+                            (row[0],)
+                        )
+                        mapped = cur.fetchone()
+                        if mapped and mapped[0]:
+                            resolved_balance_id = int(mapped[0])
+                            result = service.recalculate_balance(resolved_balance_id)
+
         if not result["success"]:
             raise HTTPException(status_code=404, detail="结余明细不存在")
 
@@ -336,7 +354,7 @@ async def update_balance_payment(
                     params.append(payout_date)
 
                 update_fields.append("updated_at = NOW()")
-                params.append(balance_id)
+                params.append(resolved_balance_id)
 
                 # 执行更新
                 sql = f"""
@@ -351,7 +369,7 @@ async def update_balance_payment(
                     SELECT payable_amount, paid_amount 
                     FROM pd_balance_details 
                     WHERE id = %s
-                """, (balance_id,))
+                """, (resolved_balance_id,))
                 row = cur.fetchone()
                 if row:
                     payable, paid = Decimal(str(row[0])), Decimal(str(row[1]))
@@ -369,13 +387,14 @@ async def update_balance_payment(
                         UPDATE pd_balance_details 
                         SET balance_amount = %s, payment_status = %s 
                         WHERE id = %s
-                    """, (balance, payment_status, balance_id))
+                    """, (balance, payment_status, resolved_balance_id))
 
         return {
             "success": True,
             "message": "打款信息更新成功",
             "data": {
-                "id": balance_id,
+                "id": resolved_balance_id,
+                "requested_id": balance_id,
                 "paid_amount": paid_amount,
                 "payee_name": payee_name,
                 "payee_account": payee_account,

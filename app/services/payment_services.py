@@ -767,6 +767,7 @@ class PaymentService:
                         
                         -- ========== 其他必要字段 ==========
                         pd.id as payment_detail_id,
+                        b.id as balance_id,
                         wb.id as weighbill_id,
                         d.id as delivery_id,
                         pd.total_amount as 应收总额,
@@ -904,6 +905,7 @@ class PaymentService:
                     FROM {PaymentService.TABLE_NAME} pd
                     LEFT JOIN pd_deliveries d ON d.id = pd.delivery_id
                     LEFT JOIN pd_weighbills wb ON wb.id = pd.weighbill_id
+                    LEFT JOIN pd_balance_details b ON b.weighbill_id = wb.id
                     WHERE {where_sql}
                 """
                 cur.execute(count_sql, tuple(params))
@@ -1455,26 +1457,23 @@ class PaymentService:
         with get_conn() as conn:
             with conn.cursor() as cur:
                 # 构建WHERE条件
-                where_clauses = [
-                    "1=1",
-                    "EXISTS (SELECT 1 FROM pd_contracts c WHERE c.contract_no = pd.contract_no)"
-                ]
+                where_clauses = ["1=1"]
                 params = []
                 
                 if contract_no:
-                    where_clauses.append("pd.contract_no LIKE %s")
+                    where_clauses.append("c.contract_no LIKE %s")
                     params.append(f"%{contract_no}%")
                 
                 if smelter_name:
-                    where_clauses.append("pd.smelter_name LIKE %s")
+                    where_clauses.append("c.smelter_company LIKE %s")
                     params.append(f"%{smelter_name}%")
                 
                 where_sql = " AND ".join(where_clauses)
                 
                 # 查询总数
                 count_sql = f"""
-                    SELECT COUNT(DISTINCT pd.contract_no) as total 
-                    FROM {PaymentService.TABLE_NAME} pd
+                    SELECT COUNT(*) as total 
+                    FROM pd_contracts c
                     WHERE {where_sql}
                 """
                 cur.execute(count_sql, tuple(params))
@@ -1484,20 +1483,34 @@ class PaymentService:
                 offset = (page - 1) * size
                 query_sql = f"""
                     SELECT 
-                        pd.contract_no,
-                        pd.smelter_name,
-                        COUNT(DISTINCT pd.id) as total_orders,
-                        SUM(pd.net_weight) as planned_total_weight,
-                        COUNT(DISTINCT wb.id) as shipped_vehicles,
-                        SUM(CASE WHEN wb.id IS NOT NULL THEN wb.net_weight ELSE 0 END) as shipped_weight,
-                        SUM(pd.net_weight) - SUM(CASE WHEN wb.id IS NOT NULL THEN wb.net_weight ELSE 0 END) as remaining_weight,
-                        MAX(wb.weigh_date) as last_ship_date
-                    FROM {PaymentService.TABLE_NAME} pd
-                    LEFT JOIN pd_deliveries d ON d.id = COALESCE(pd.delivery_id, pd.sales_order_id)
-                    LEFT JOIN pd_weighbills wb ON wb.delivery_id = d.id OR wb.id = pd.weighbill_id
+                        c.contract_no,
+                        c.smelter_company as smelter_name,
+                        (
+                            SELECT COALESCE(SUM(d.quantity), 0)
+                            FROM pd_deliveries d
+                            WHERE d.contract_no = c.contract_no
+                        ) as planned_total_weight,
+                        (
+                            SELECT COUNT(*)
+                            FROM pd_weighbills wb
+                            WHERE wb.contract_no = c.contract_no
+                              AND wb.ocr_status IN ('已上传磅单', '已确认')
+                        ) as shipped_vehicles,
+                        (
+                            SELECT COALESCE(SUM(wb.net_weight), 0)
+                            FROM pd_weighbills wb
+                            WHERE wb.contract_no = c.contract_no
+                              AND wb.ocr_status IN ('已上传磅单', '已确认')
+                        ) as shipped_weight,
+                        (
+                            SELECT MAX(wb.weigh_date)
+                            FROM pd_weighbills wb
+                            WHERE wb.contract_no = c.contract_no
+                              AND wb.ocr_status IN ('已上传磅单', '已确认')
+                        ) as last_ship_date
+                    FROM pd_contracts c
                     WHERE {where_sql}
-                    GROUP BY pd.contract_no, pd.smelter_name
-                    ORDER BY MAX(pd.created_at) DESC
+                    ORDER BY c.created_at DESC
                     LIMIT %s OFFSET %s
                 """
                 
